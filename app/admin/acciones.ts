@@ -1,0 +1,312 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { obtenerAdmin } from "@/lib/supabase/server";
+import { supabaseConfigurado } from "@/lib/config";
+import { normalizarCelular } from "@/lib/telefono";
+import { hoy, sumarMeses } from "@/lib/negocio";
+
+export type Resultado = { ok: boolean; mensaje: string } | null;
+
+const MODO_DEMO: Resultado = { ok: false, mensaje: "Modo demostración: conecta Supabase para guardar cambios." };
+
+async function exigirAdmin() {
+  const { supabase, esAdmin } = await obtenerAdmin();
+  if (!esAdmin) throw new Error("No autorizado");
+  return supabase;
+}
+
+const texto = (f: FormData, k: string, max: number) => String(f.get(k) ?? "").trim().slice(0, max);
+const fecha = (f: FormData, k: string) => {
+  const v = String(f.get(k) ?? "");
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+};
+/** Número opcional: vacío = null. Acepta "1,500.50". */
+const numero = (f: FormData, k: string) => {
+  const v = String(f.get(k) ?? "").replace(/[,\sL]/g, "");
+  if (!v) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : NaN;
+};
+const err = (e: unknown): Resultado => ({ ok: false, mensaje: e instanceof Error ? e.message : "Error inesperado." });
+
+// Clientes ------------------------------------------------------------------
+
+export async function guardarCliente(_prev: Resultado, f: FormData): Promise<Resultado> {
+  if (!supabaseConfigurado) return MODO_DEMO;
+  let nuevoId: number | null = null;
+  try {
+    const supabase = await exigirAdmin();
+    const id = Number(f.get("id")) || null;
+    const negocio = texto(f, "negocio", 120);
+    if (!negocio) return { ok: false, mensaje: "Escribe el nombre del negocio." };
+
+    const cel = normalizarCelular(texto(f, "codigo_pais", 4) || "504", texto(f, "celular", 30));
+    if (!cel.ok) return { ok: false, mensaje: cel.error };
+
+    const limite = numero(f, "limite_personalizado");
+    const cuota = numero(f, "cuota_personalizada");
+    if (limite !== null && (!Number.isInteger(limite) || limite <= 0)) return { ok: false, mensaje: "El límite de productos debe ser un número entero mayor que 0." };
+    if (cuota !== null && (Number.isNaN(cuota) || cuota < 0)) return { ok: false, mensaje: "La cuota mensual no es válida." };
+
+    const estado = texto(f, "estado", 20);
+    const datos = {
+      negocio,
+      contacto: texto(f, "contacto", 120),
+      codigo_pais: cel.codigo,
+      celular: cel.nacional,
+      correo: texto(f, "correo", 120),
+      direccion: texto(f, "direccion", 200),
+      sitio_url: texto(f, "sitio_url", 200),
+      dominio: texto(f, "dominio", 120),
+      plan_id: Number(f.get("plan_id")) || null,
+      con_dominio: f.get("con_dominio") === "on",
+      limite_personalizado: limite,
+      cuota_personalizada: cuota,
+      estado: ["prueba", "activo", "suspendido", "cancelado"].includes(estado) ? estado : "activo",
+      fecha_inicio: fecha(f, "fecha_inicio") ?? hoy(),
+      proximo_pago: fecha(f, "proximo_pago"),
+      instalacion_pagada: f.get("instalacion_pagada") === "on",
+      notas: texto(f, "notas", 2000),
+      actualizado_en: new Date().toISOString(),
+    };
+
+    if (id) {
+      const { error } = await supabase.from("clientes").update(datos).eq("id", id);
+      if (error) return { ok: false, mensaje: "No se pudo guardar: " + error.message };
+      revalidatePath("/admin", "layout");
+      return { ok: true, mensaje: "Cambios guardados." };
+    }
+    const { data, error } = await supabase.from("clientes").insert(datos).select("id").single();
+    if (error) return { ok: false, mensaje: "No se pudo guardar: " + error.message };
+    nuevoId = data.id;
+  } catch (e) {
+    return err(e);
+  }
+  revalidatePath("/admin", "layout");
+  redirect(`/admin/clientes/${nuevoId}?nuevo=1`);
+}
+
+/** Cambio rápido de plan desde la ficha del cliente. */
+export async function cambiarPlan(_prev: Resultado, f: FormData): Promise<Resultado> {
+  if (!supabaseConfigurado) return MODO_DEMO;
+  try {
+    const supabase = await exigirAdmin();
+    const id = Number(f.get("id"));
+    const plan_id = Number(f.get("plan_id")) || null;
+    const { error } = await supabase.from("clientes").update({ plan_id, actualizado_en: new Date().toISOString() }).eq("id", id);
+    if (error) return { ok: false, mensaje: error.message };
+    revalidatePath("/admin", "layout");
+    return { ok: true, mensaje: "Plan actualizado. Recuerda aplicar el nuevo límite en su tienda." };
+  } catch (e) {
+    return err(e);
+  }
+}
+
+export async function eliminarCliente(id: number): Promise<Resultado> {
+  if (!supabaseConfigurado) return MODO_DEMO;
+  try {
+    const supabase = await exigirAdmin();
+    const { error } = await supabase.from("clientes").delete().eq("id", id);
+    if (error) return { ok: false, mensaje: error.message };
+  } catch (e) {
+    return err(e);
+  }
+  revalidatePath("/admin", "layout");
+  redirect("/admin");
+}
+
+// Pagos ---------------------------------------------------------------------
+
+export async function registrarPago(_prev: Resultado, f: FormData): Promise<Resultado> {
+  if (!supabaseConfigurado) return MODO_DEMO;
+  try {
+    const supabase = await exigirAdmin();
+    const cliente_id = Number(f.get("cliente_id"));
+    const monto = numero(f, "monto");
+    if (monto === null || Number.isNaN(monto) || monto <= 0) return { ok: false, mensaje: "Escribe el monto recibido." };
+    const concepto = texto(f, "concepto", 20);
+    if (!["mensualidad", "instalacion", "dominio", "otro"].includes(concepto)) return { ok: false, mensaje: "Elige el concepto del pago." };
+    const meses = concepto === "mensualidad" ? Math.min(24, Math.max(1, Number(f.get("meses")) || 1)) : 0;
+    const fechaPago = fecha(f, "fecha") ?? hoy();
+
+    const { data: cliente } = await supabase.from("clientes").select("proximo_pago, estado").eq("id", cliente_id).maybeSingle();
+    if (!cliente) return { ok: false, mensaje: "No se encontró el cliente." };
+
+    const { error } = await supabase.from("pagos").insert({
+      cliente_id,
+      monto,
+      concepto,
+      meses,
+      fecha: fechaPago,
+      metodo: texto(f, "metodo", 40),
+      nota: texto(f, "nota", 300),
+    });
+    if (error) return { ok: false, mensaje: "No se pudo registrar: " + error.message };
+
+    // Efecto del pago en la ficha del cliente
+    const cambios: Record<string, unknown> = {};
+    if (meses > 0) {
+      cambios.proximo_pago = sumarMeses(cliente.proximo_pago ?? fechaPago, meses);
+      if (cliente.estado === "suspendido") cambios.estado = "activo";
+    }
+    if (concepto === "instalacion") cambios.instalacion_pagada = true;
+    if (Object.keys(cambios).length) {
+      cambios.actualizado_en = new Date().toISOString();
+      await supabase.from("clientes").update(cambios).eq("id", cliente_id);
+    }
+
+    revalidatePath("/admin", "layout");
+    return {
+      ok: true,
+      mensaje: meses > 0 ? `Pago registrado. Próximo pago movido ${meses === 1 ? "1 mes" : `${meses} meses`} adelante.` : "Pago registrado.",
+    };
+  } catch (e) {
+    return err(e);
+  }
+}
+
+/** Elimina un pago. Si era mensualidad, regresa la fecha de próximo pago los meses que había adelantado. */
+export async function eliminarPago(id: number): Promise<Resultado> {
+  if (!supabaseConfigurado) return MODO_DEMO;
+  try {
+    const supabase = await exigirAdmin();
+    const { data: pago } = await supabase.from("pagos").select("cliente_id, meses").eq("id", id).maybeSingle();
+    if (!pago) return { ok: false, mensaje: "El pago ya no existe." };
+    const { error } = await supabase.from("pagos").delete().eq("id", id);
+    if (error) return { ok: false, mensaje: error.message };
+    if (pago.meses > 0) {
+      const { data: c } = await supabase.from("clientes").select("proximo_pago").eq("id", pago.cliente_id).maybeSingle();
+      if (c?.proximo_pago) {
+        await supabase.from("clientes").update({ proximo_pago: sumarMeses(c.proximo_pago, -pago.meses) }).eq("id", pago.cliente_id);
+      }
+    }
+    revalidatePath("/admin", "layout");
+    return { ok: true, mensaje: "Pago eliminado." };
+  } catch (e) {
+    return err(e);
+  }
+}
+
+// Planes --------------------------------------------------------------------
+
+export async function guardarPlan(_prev: Resultado, f: FormData): Promise<Resultado> {
+  if (!supabaseConfigurado) return MODO_DEMO;
+  try {
+    const supabase = await exigirAdmin();
+    const id = Number(f.get("id")) || null;
+    const nombre = texto(f, "nombre", 40);
+    const precio = numero(f, "precio_mensual");
+    const limite = numero(f, "limite_productos");
+    if (!nombre) return { ok: false, mensaje: "El plan necesita un nombre." };
+    if (precio === null || Number.isNaN(precio) || precio < 0) return { ok: false, mensaje: "Escribe el precio mensual." };
+    if (limite === null || !Number.isInteger(limite) || limite <= 0) return { ok: false, mensaje: "El límite de productos debe ser un número entero mayor que 0." };
+    const color = texto(f, "color", 10);
+    const datos = {
+      nombre,
+      subtitulo: texto(f, "subtitulo", 80),
+      precio_mensual: precio,
+      limite_productos: limite,
+      caracteristicas: texto(f, "caracteristicas", 1000),
+      color: ["azul", "naranja", "verde", "morado", "gris"].includes(color) ? color : "azul",
+      orden: Math.trunc(Number(f.get("orden")) || 0),
+      visible: f.get("visible") === "on",
+    };
+    const { error } = id
+      ? await supabase.from("planes").update(datos).eq("id", id)
+      : await supabase.from("planes").insert(datos);
+    if (error) {
+      if (error.code === "23505") return { ok: false, mensaje: "Ya existe un plan con ese nombre." };
+      return { ok: false, mensaje: "No se pudo guardar: " + error.message };
+    }
+    revalidatePath("/", "layout");
+    return { ok: true, mensaje: id ? `Plan “${nombre}” actualizado.` : `Plan “${nombre}” creado.` };
+  } catch (e) {
+    return err(e);
+  }
+}
+
+export async function eliminarPlan(id: number): Promise<Resultado> {
+  if (!supabaseConfigurado) return MODO_DEMO;
+  try {
+    const supabase = await exigirAdmin();
+    const { error } = await supabase.from("planes").delete().eq("id", id);
+    if (error) {
+      if (error.code === "23503") return { ok: false, mensaje: "Hay clientes con este plan. Cámbialos de plan primero, o desmarca “Mostrar en la página” para ocultarlo." };
+      return { ok: false, mensaje: error.message };
+    }
+    revalidatePath("/", "layout");
+    return { ok: true, mensaje: "Plan eliminado." };
+  } catch (e) {
+    return err(e);
+  }
+}
+
+// Ajustes -------------------------------------------------------------------
+
+export async function guardarAjustes(_prev: Resultado, f: FormData): Promise<Resultado> {
+  if (!supabaseConfigurado) return MODO_DEMO;
+  try {
+    const supabase = await exigirAdmin();
+    const nombre = texto(f, "nombre_negocio", 60);
+    if (!nombre) return { ok: false, mensaje: "Escribe el nombre de tu negocio." };
+    const cel = normalizarCelular(texto(f, "codigo_pais", 4) || "504", texto(f, "celular", 30));
+    if (!cel.ok) return { ok: false, mensaje: cel.error };
+    const inst = numero(f, "precio_instalacion");
+    const dom = numero(f, "precio_dominio");
+    if (inst === null || Number.isNaN(inst) || inst < 0 || dom === null || Number.isNaN(dom) || dom < 0) {
+      return { ok: false, mensaje: "Revisa los precios de instalación y dominio." };
+    }
+    const { error } = await supabase
+      .from("ajustes_negocio")
+      .update({
+        nombre_negocio: nombre,
+        codigo_pais: cel.codigo,
+        celular: cel.nacional,
+        correo: texto(f, "correo", 120),
+        direccion: texto(f, "direccion", 200),
+        precio_instalacion: inst,
+        precio_dominio: dom,
+        dias_aviso: Math.min(60, Math.max(0, Math.trunc(Number(f.get("dias_aviso")) || 0))),
+        plantilla_cobro: texto(f, "plantilla_cobro", 1500),
+        plantilla_vencido: texto(f, "plantilla_vencido", 1500),
+        plantilla_recibo: texto(f, "plantilla_recibo", 1500),
+        actualizado_en: new Date().toISOString(),
+      })
+      .eq("id", 1);
+    if (error) return { ok: false, mensaje: "No se pudo guardar: " + error.message };
+    revalidatePath("/", "layout");
+    return { ok: true, mensaje: "Ajustes guardados." };
+  } catch (e) {
+    return err(e);
+  }
+}
+
+// Solicitudes de demostración -------------------------------------------------
+
+export async function marcarSolicitud(id: number, atendida: boolean): Promise<Resultado> {
+  if (!supabaseConfigurado) return MODO_DEMO;
+  try {
+    const supabase = await exigirAdmin();
+    const { error } = await supabase.from("solicitudes_demo").update({ atendida }).eq("id", id);
+    if (error) return { ok: false, mensaje: error.message };
+    revalidatePath("/admin", "layout");
+    return { ok: true, mensaje: atendida ? "Marcada como atendida." : "Marcada como pendiente." };
+  } catch (e) {
+    return err(e);
+  }
+}
+
+export async function eliminarSolicitud(id: number): Promise<Resultado> {
+  if (!supabaseConfigurado) return MODO_DEMO;
+  try {
+    const supabase = await exigirAdmin();
+    const { error } = await supabase.from("solicitudes_demo").delete().eq("id", id);
+    if (error) return { ok: false, mensaje: error.message };
+    revalidatePath("/admin", "layout");
+    return { ok: true, mensaje: "Solicitud eliminada." };
+  } catch (e) {
+    return err(e);
+  }
+}
