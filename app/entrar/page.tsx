@@ -12,7 +12,7 @@ export default function Entrar() {
     <div className="flex min-h-screen items-center justify-center bg-marino-900 px-4 py-10">
       <form action={accion} className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow-xl">
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="" className="h-12 w-12" />
+          <img src="/logo.webp" width={128} height={128} alt="" className="h-12 w-12" />
           <div>
             <h1 className="text-xl font-bold">Panel de clientes</h1>
             <p className="text-sm text-gray-500">Solo para el administrador.</p>

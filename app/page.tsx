@@ -31,10 +31,10 @@ const INSTALACION = [
 ];
 
 const CAPTURAS = [
-  { src: "/capturas/tel-1.png", titulo: "Sitio web para clientes" },
-  { src: "/capturas/tel-2.png", titulo: "App web para clientes" },
-  { src: "/capturas/tel-3.png", titulo: "Carrito de cotización" },
-  { src: "/capturas/tel-4.png", titulo: "Panel administrativo" },
+  { src: "/capturas/tel-1.webp", titulo: "Sitio web para clientes" },
+  { src: "/capturas/tel-2.webp", titulo: "App web para clientes" },
+  { src: "/capturas/tel-3.webp", titulo: "Carrito de cotización" },
+  { src: "/capturas/tel-4.webp", titulo: "Panel administrativo" },
 ];
 
 export default async function Inicio() {
@@ -52,7 +52,7 @@ export default async function Inicio() {
       <header className="sticky top-0 z-30 border-b border-marino-800 bg-marino-900/95 text-white backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <a href="#" className="flex items-center gap-2 font-bold">
-            <img src="/logo.png" alt="" className="h-10 w-10" />
+            <img src="/logo.webp" width={128} height={128} alt="" className="h-10 w-10" />
             <span className="text-lg">{ajustes.nombre_negocio}</span>
           </a>
           <nav className="hidden items-center gap-6 text-sm font-medium text-gray-200 md:flex">
@@ -92,8 +92,8 @@ export default async function Inicio() {
             <p className="mt-6 text-sm text-gray-300">Ideal para ferreterías y negocios de materiales de construcción.</p>
           </div>
           <div className="relative mx-auto w-full max-w-md">
-            <img src="/capturas/tel-1.png" alt="Tienda en línea en un celular" className="mx-auto w-60 drop-shadow-2xl sm:w-72" />
-            <img src="/logo.png" alt="" className="absolute -left-2 top-4 hidden h-28 w-28 drop-shadow-xl sm:block" />
+            <img src="/capturas/tel-1.webp" width={480} height={987} fetchPriority="high" alt="Tienda en línea en un celular" className="h-auto mx-auto w-60 drop-shadow-2xl sm:w-72" />
+            <img src="/logo.webp" width={128} height={128} alt="" className="absolute -left-2 top-4 hidden h-28 w-28 drop-shadow-xl sm:block" />
           </div>
         </div>
       </section>
@@ -124,7 +124,7 @@ export default async function Inicio() {
           <div className="mt-10 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {CAPTURAS.map((c) => (
               <figure key={c.src} className="text-center">
-                <img src={c.src} alt={c.titulo} className="mx-auto w-full max-w-[240px]" loading="lazy" />
+                <img src={c.src} width={480} height={987} alt={c.titulo} className="mx-auto h-auto w-full max-w-[240px]" loading="lazy" />
                 <figcaption className="mx-auto mt-2 inline-block rounded-full bg-marca-500 px-4 py-1.5 text-sm font-bold text-white">{c.titulo}</figcaption>
               </figure>
             ))}
@@ -206,9 +206,9 @@ export default async function Inicio() {
           <h2 className="text-center text-3xl font-black text-marino-900">Nuestros anuncios</h2>
           <p className="mt-2 text-center text-gray-600">Toca una imagen para verla completa o compartirla.</p>
           <div className="mt-10 grid gap-6 sm:grid-cols-2">
-            {["/anuncios/funciones.png", "/anuncios/planes.png"].map((src) => (
-              <a key={src} href={src} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-2xl shadow-md transition hover:shadow-xl">
-                <img src={src} alt="Anuncio de tienda en línea para ferreterías" className="w-full" loading="lazy" />
+            {["funciones", "planes"].map((n) => (
+              <a key={n} href={`/anuncios/${n}.webp`} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-2xl shadow-md transition hover:shadow-xl">
+                <img src={`/anuncios/${n}-mini.webp`} width={560} height={840} alt="Anuncio de tienda en línea para ferreterías" className="h-auto w-full" loading="lazy" decoding="async" />
               </a>
             ))}
           </div>
@@ -254,7 +254,7 @@ export default async function Inicio() {
       </section>
 
       <footer className="bg-marino-950 py-8 text-center text-sm text-gray-400">
-        <img src="/logo.png" alt="" className="mx-auto mb-3 h-14 w-14" />
+        <img src="/logo.webp" width={128} height={128} alt="" className="mx-auto mb-3 h-14 w-14" />
         <p>© {new Date().getFullYear()} {ajustes.nombre_negocio}. {ajustes.direccion}</p>
         {/* Acceso discreto para el administrador */}
         <Link href="/entrar" className="mt-3 inline-block text-xs uppercase tracking-wider text-gray-600 hover:text-gray-300">

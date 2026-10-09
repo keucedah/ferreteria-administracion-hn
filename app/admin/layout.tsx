@@ -36,7 +36,7 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
         <div className="mx-auto max-w-6xl px-4">
           <div className="flex flex-wrap items-center justify-between gap-3 py-3">
             <Link href="/admin" className="flex items-center gap-2">
-              <img src="/logo.png" alt="" className="h-10 w-10" />
+              <img src="/logo.webp" width={128} height={128} alt="" className="h-10 w-10" />
               <div>
                 <p className="font-bold leading-tight">Panel de clientes</p>
                 <p className="text-xs text-gray-300">{correo}</p>
