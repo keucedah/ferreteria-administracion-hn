@@ -2,12 +2,17 @@ import Link from "next/link";
 import FormularioCliente from "@/components/admin/FormularioCliente";
 import { obtenerAjustes, obtenerPlanes } from "@/lib/datos";
 import { hoy, sumarMeses } from "@/lib/negocio";
+import { claveAleatoria } from "@/lib/clave";
+import { URL_TIENDAS, servicioConfigurado, supabaseConfigurado } from "@/lib/config";
 
 // Se puede abrir con datos: /admin/clientes/nuevo?negocio=…&contacto=…&celular=… (desde Solicitudes)
+export const dynamic = "force-dynamic";
+
 export default async function NuevoCliente({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const q = await searchParams;
   const [planes, ajustes] = await Promise.all([obtenerPlanes(), obtenerAjustes()]);
   const h = hoy();
+  const puedeCrearTienda = servicioConfigurado || !supabaseConfigurado;
   return (
     <div className="mx-auto max-w-2xl">
       <Link href="/admin" className="text-sm text-gray-500 hover:underline">← Volver a clientes</Link>
@@ -19,7 +24,13 @@ export default async function NuevoCliente({ searchParams }: { searchParams: Pro
           precioDominio={ajustes.precio_dominio}
           hoy={h}
           proximoSugerido={sumarMeses(h, 1)}
+          tienda={puedeCrearTienda ? { claveSugerida: claveAleatoria(), urlTiendas: URL_TIENDAS } : undefined}
         />
+        {!puedeCrearTienda && (
+          <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Para crear la tienda del cliente desde aquí, agrega la variable <b>SUPABASE_SERVICE_ROLE_KEY</b> en Vercel (ver README).
+          </p>
+        )}
       </div>
     </div>
   );

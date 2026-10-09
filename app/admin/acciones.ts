@@ -1,11 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { obtenerAdmin } from "@/lib/supabase/server";
 import { supabaseConfigurado } from "@/lib/config";
 import { normalizarCelular } from "@/lib/telefono";
 import { hoy, sumarMeses } from "@/lib/negocio";
+import { cambiarClaveDuenos, crearTienda, sincronizarTienda, suspenderTienda } from "@/lib/tiendas";
+import type { Cliente, Plan } from "@/lib/types";
 
 export type Resultado = { ok: boolean; mensaje: string } | null;
 
@@ -29,6 +32,32 @@ const numero = (f: FormData, k: string) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : NaN;
 };
+/** Cliente y su plan, para copiar a su tienda el límite, el dominio y el estado. */
+async function clienteYPlan(supabase: Awaited<ReturnType<typeof exigirAdmin>>, id: number) {
+  const { data: cliente } = await supabase.from("clientes").select("*").eq("id", id).maybeSingle<Cliente>();
+  if (!cliente) return { cliente: null, plan: undefined };
+  const { data: plan } = cliente.plan_id
+    ? await supabase.from("planes").select("*").eq("id", cliente.plan_id).maybeSingle<Plan>()
+    : { data: null };
+  return { cliente, plan: plan ?? undefined };
+}
+
+async function sincronizar(supabase: Awaited<ReturnType<typeof exigirAdmin>>, id: number) {
+  const { cliente, plan } = await clienteYPlan(supabase, id);
+  return cliente ? sincronizarTienda(cliente, plan) : null;
+}
+
+/** Guarda por 15 minutos el acceso recién creado, para mostrarlo una vez en la ficha y enviarlo por WhatsApp. */
+async function recordarAcceso(clienteId: number, correo: string, clave: string) {
+  (await cookies()).set("acceso_nuevo", JSON.stringify({ clienteId, correo, clave }), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/admin",
+    maxAge: 15 * 60,
+  });
+}
+
 const err = (e: unknown): Resultado => ({ ok: false, mensaje: e instanceof Error ? e.message : "Error inesperado." });
 
 // Clientes ------------------------------------------------------------------
@@ -36,6 +65,7 @@ const err = (e: unknown): Resultado => ({ ok: false, mensaje: e instanceof Error
 export async function guardarCliente(_prev: Resultado, f: FormData): Promise<Resultado> {
   if (!supabaseConfigurado) return MODO_DEMO;
   let nuevoId: number | null = null;
+  let errorTienda = "";
   try {
     const supabase = await exigirAdmin();
     const id = Number(f.get("id")) || null;
@@ -75,17 +105,72 @@ export async function guardarCliente(_prev: Resultado, f: FormData): Promise<Res
     if (id) {
       const { error } = await supabase.from("clientes").update(datos).eq("id", id);
       if (error) return { ok: false, mensaje: "No se pudo guardar: " + error.message };
+      const errSync = await sincronizar(supabase, id);
       revalidatePath("/admin", "layout");
+      if (errSync) return { ok: false, mensaje: "Datos guardados. " + errSync };
       return { ok: true, mensaje: "Cambios guardados." };
     }
     const { data, error } = await supabase.from("clientes").insert(datos).select("id").single();
     if (error) return { ok: false, mensaje: "No se pudo guardar: " + error.message };
     nuevoId = data.id;
+
+    // Tienda en línea del cliente nuevo (opcional)
+    const slug = texto(f, "slug", 40).toLowerCase();
+    if (slug) {
+      const correo = texto(f, "correo_dueno", 120) || datos.correo;
+      const clave = String(f.get("clave") ?? "");
+      const { cliente, plan } = await clienteYPlan(supabase, data.id);
+      const r = cliente ? await crearTienda(cliente, plan, slug, correo, clave) : { ok: false as const, mensaje: "" };
+      if (r.ok) await recordarAcceso(data.id, correo.toLowerCase(), r.usuarioNuevo ? clave : "");
+      else errorTienda = r.mensaje;
+    }
   } catch (e) {
     return err(e);
   }
   revalidatePath("/admin", "layout");
-  redirect(`/admin/clientes/${nuevoId}?nuevo=1`);
+  redirect(`/admin/clientes/${nuevoId}?nuevo=1${errorTienda ? "&error_tienda=" + encodeURIComponent(errorTienda) : ""}`);
+}
+
+/** Crea la tienda de un cliente que todavía no tiene. */
+export async function crearTiendaCliente(_prev: Resultado, f: FormData): Promise<Resultado> {
+  if (!supabaseConfigurado) return MODO_DEMO;
+  try {
+    const supabase = await exigirAdmin();
+    const id = Number(f.get("id"));
+    const { cliente, plan } = await clienteYPlan(supabase, id);
+    if (!cliente) return { ok: false, mensaje: "No se encontró el cliente." };
+    const correo = texto(f, "correo_dueno", 120);
+    const clave = String(f.get("clave") ?? "");
+    const r = await crearTienda(cliente, plan, texto(f, "slug", 40).toLowerCase(), correo, clave);
+    if (!r.ok) return { ok: false, mensaje: r.mensaje };
+    await recordarAcceso(id, correo.toLowerCase(), r.usuarioNuevo ? clave : "");
+    revalidatePath("/admin", "layout");
+    return {
+      ok: true,
+      mensaje: r.usuarioNuevo ? "Tienda creada." : "Tienda creada. Ese correo ya tenía usuario: entra con su contraseña de siempre.",
+    };
+  } catch (e) {
+    return err(e);
+  }
+}
+
+/** Nueva contraseña para el dueño de la tienda (por si la olvidó). */
+export async function cambiarClaveTienda(_prev: Resultado, f: FormData): Promise<Resultado> {
+  if (!supabaseConfigurado) return MODO_DEMO;
+  try {
+    const supabase = await exigirAdmin();
+    const id = Number(f.get("id"));
+    const { cliente } = await clienteYPlan(supabase, id);
+    if (!cliente?.tienda_id) return { ok: false, mensaje: "Este cliente no tiene tienda." };
+    const clave = String(f.get("clave") ?? "");
+    const e = await cambiarClaveDuenos(cliente.tienda_id, clave);
+    if (e) return { ok: false, mensaje: e };
+    await recordarAcceso(id, String(f.get("correo") ?? ""), clave);
+    revalidatePath("/admin", "layout");
+    return { ok: true, mensaje: "Contraseña cambiada." };
+  } catch (e) {
+    return err(e);
+  }
 }
 
 /** Cambio rápido de plan desde la ficha del cliente. */
@@ -97,8 +182,10 @@ export async function cambiarPlan(_prev: Resultado, f: FormData): Promise<Result
     const plan_id = Number(f.get("plan_id")) || null;
     const { error } = await supabase.from("clientes").update({ plan_id, actualizado_en: new Date().toISOString() }).eq("id", id);
     if (error) return { ok: false, mensaje: error.message };
+    const errSync = await sincronizar(supabase, id);
     revalidatePath("/admin", "layout");
-    return { ok: true, mensaje: "Plan actualizado. Recuerda aplicar el nuevo límite en su tienda." };
+    if (errSync) return { ok: false, mensaje: "Plan guardado. " + errSync };
+    return { ok: true, mensaje: "Plan actualizado. Su tienda ya tiene el nuevo límite." };
   } catch (e) {
     return err(e);
   }
@@ -108,6 +195,8 @@ export async function eliminarCliente(id: number): Promise<Resultado> {
   if (!supabaseConfigurado) return MODO_DEMO;
   try {
     const supabase = await exigirAdmin();
+    const { data: c } = await supabase.from("clientes").select("tienda_id").eq("id", id).maybeSingle();
+    await suspenderTienda(c?.tienda_id ?? null);
     const { error } = await supabase.from("clientes").delete().eq("id", id);
     if (error) return { ok: false, mensaje: error.message };
   } catch (e) {
@@ -155,6 +244,7 @@ export async function registrarPago(_prev: Resultado, f: FormData): Promise<Resu
     if (Object.keys(cambios).length) {
       cambios.actualizado_en = new Date().toISOString();
       await supabase.from("clientes").update(cambios).eq("id", cliente_id);
+      if (cambios.estado) await sincronizar(supabase, cliente_id);
     }
 
     revalidatePath("/admin", "layout");
@@ -219,6 +309,11 @@ export async function guardarPlan(_prev: Resultado, f: FormData): Promise<Result
     if (error) {
       if (error.code === "23505") return { ok: false, mensaje: "Ya existe un plan con ese nombre." };
       return { ok: false, mensaje: "No se pudo guardar: " + error.message };
+    }
+    if (id) {
+      // El nuevo límite llega a las tiendas de los clientes con este plan
+      const { data: conPlan } = await supabase.from("clientes").select("id").eq("plan_id", id).not("tienda_id", "is", null);
+      for (const c of conPlan ?? []) await sincronizar(supabase, c.id);
     }
     revalidatePath("/", "layout");
     return { ok: true, mensaje: id ? `Plan “${nombre}” actualizado.` : `Plan “${nombre}” creado.` };

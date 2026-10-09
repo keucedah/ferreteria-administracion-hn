@@ -49,6 +49,7 @@ function cliente(id: number, c: Partial<Cliente> & Pick<Cliente, "negocio">): Cl
     proximo_pago: dias(20),
     instalacion_pagada: true,
     notas: "",
+    tienda_id: null,
     creado_en: sumarMeses(h, -4) + "T12:00:00Z",
     ...c,
   };

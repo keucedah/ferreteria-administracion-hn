@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import BotonAccion from "@/components/admin/BotonAccion";
-import BotonCopiar from "@/components/admin/BotonCopiar";
 import Formulario from "@/components/admin/Formulario";
 import FormularioCliente from "@/components/admin/FormularioCliente";
 import MensajeLibre from "@/components/admin/MensajeLibre";
+import SeccionTienda from "@/components/admin/SeccionTienda";
 import { InsigniaCobro, InsigniaEstado } from "@/components/admin/Insignias";
 import { cambiarPlan, eliminarCliente, eliminarPago, registrarPago } from "@/app/admin/acciones";
 import { obtenerAjustes, obtenerCliente, obtenerPagos, obtenerPlanes } from "@/lib/datos";
@@ -13,11 +13,10 @@ import {
   NOMBRE_CONCEPTO, cuotaMensual, datosMensaje, enlaceWhatsApp, estadoCobro, fechaCorta, hoy, lempiras, limiteProductos, llenarPlantilla, sumarMeses, textoCobro,
 } from "@/lib/negocio";
 import { formatearCelular, numeroWhatsApp } from "@/lib/telefono";
-import { sqlLimite } from "@/lib/sqlLimite";
 
-export default async function FichaCliente({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ nuevo?: string }> }) {
+export default async function FichaCliente({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ nuevo?: string; error_tienda?: string }> }) {
   const { id } = await params;
-  const { nuevo } = await searchParams;
+  const { nuevo, error_tienda } = await searchParams;
   const cliente = await obtenerCliente(Number(id));
   if (!cliente) notFound();
   const [planes, ajustes, pagos] = await Promise.all([obtenerPlanes(), obtenerAjustes(), obtenerPagos(cliente.id)]);
@@ -44,7 +43,6 @@ export default async function FichaCliente({ params, searchParams }: { params: P
         }]
       : []),
   ];
-  const sql = limite ? sqlLimite(plan?.nombre ?? "Personalizado", limite, formatearCelular(ajustes.codigo_pais, ajustes.celular)) : "";
   const total = pagos.reduce((s, p) => s + p.monto, 0);
 
   return (
@@ -67,14 +65,21 @@ export default async function FichaCliente({ params, searchParams }: { params: P
             )}
             <BotonAccion
               accion={eliminarCliente.bind(null, cliente.id)}
-              confirmacion={`¿Eliminar a “${cliente.negocio}” y todo su historial de pagos? Esto no se puede deshacer.`}
+              confirmacion={`¿Eliminar a “${cliente.negocio}” y todo su historial de pagos? Esto no se puede deshacer.${cliente.tienda_id ? " Su tienda quedará suspendida (sus productos no se borran)." : ""}`}
               className="boton-peligro"
             >
               Eliminar cliente
             </BotonAccion>
           </div>
         </div>
-        {nuevo && <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">Cliente agregado. Ya puedes registrar pagos y enviarle mensajes.</p>}
+        {nuevo && (
+          <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
+            Cliente agregado{cliente.tienda_id ? " con su tienda" : ""}. Ya puedes registrar pagos y enviarle mensajes.
+          </p>
+        )}
+        {error_tienda && (
+          <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">No se creó su tienda: {error_tienda} Corrige el dato y créala abajo en “Tienda en línea”.</p>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
@@ -208,22 +213,7 @@ export default async function FichaCliente({ params, searchParams }: { params: P
             <FormularioCliente cliente={cliente} planes={planes} precioDominio={ajustes.precio_dominio} hoy={h} proximoSugerido={sumarMeses(h, 1)} />
           </section>
 
-          {sql && (
-            <section className="tarjeta">
-              <h2 className="text-lg font-bold">Aplicar el límite en su tienda</h2>
-              <p className="mt-1 text-sm text-gray-600">
-                Para que su tienda no deje subir más de <b>{limite?.toLocaleString("es-HN")}</b> productos: copia este código, abre el proyecto de Supabase
-                de su tienda, ve a <b>SQL Editor</b>, pégalo y presiona <b>Run</b>. Repite cada vez que le cambies el plan.
-              </p>
-              <div className="mt-3 flex gap-2">
-                <BotonCopiar texto={sql} etiqueta="Copiar código del límite" className="boton-primario" />
-              </div>
-              <details className="mt-3">
-                <summary className="cursor-pointer text-sm text-gray-500">Ver el código</summary>
-                <pre className="mt-2 max-h-64 overflow-auto rounded-lg bg-gray-900 p-3 text-xs text-gray-100">{sql}</pre>
-              </details>
-            </section>
-          )}
+          <SeccionTienda cliente={cliente} ajustes={ajustes} />
         </div>
       </div>
     </div>

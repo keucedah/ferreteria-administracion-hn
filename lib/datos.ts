@@ -32,7 +32,7 @@ export const obtenerPlanes = cache(async (): Promise<Plan[]> => {
 });
 
 const COLUMNAS_CLIENTE =
-  "id, negocio, contacto, codigo_pais, celular, correo, direccion, sitio_url, dominio, plan_id, con_dominio, limite_personalizado, cuota_personalizada, estado, fecha_inicio, proximo_pago, instalacion_pagada, notas, creado_en";
+  "id, negocio, contacto, codigo_pais, celular, correo, direccion, sitio_url, dominio, plan_id, con_dominio, limite_personalizado, cuota_personalizada, estado, fecha_inicio, proximo_pago, instalacion_pagada, notas, tienda_id, creado_en";
 
 const aCliente = (c: Cliente): Cliente => ({
   ...c,

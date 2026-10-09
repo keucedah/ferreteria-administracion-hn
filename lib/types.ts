@@ -47,7 +47,22 @@ export type Cliente = {
   proximo_pago: string | null;
   instalacion_pagada: boolean;
   notas: string;
+  tienda_id: number | null;
   creado_en: string;
+};
+
+/** Tienda en línea de un cliente, como se ve en su ficha. */
+export type TiendaCliente = {
+  id: number;
+  slug: string;
+  nombre_tienda: string;
+  dominio: string | null;
+  activa: boolean;
+  limite_productos: number;
+  nombre_plan: string;
+  productos: number;
+  duenos: string[];
+  enlace: string;
 };
 
 export type ConceptoPago = "mensualidad" | "instalacion" | "dominio" | "otro";

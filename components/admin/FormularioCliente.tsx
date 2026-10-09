@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Formulario from "./Formulario";
+import CamposTienda from "./CamposTienda";
 import { guardarCliente } from "@/app/admin/acciones";
 import { PAISES } from "@/lib/telefono";
 import { lempiras } from "@/lib/negocio";
@@ -13,13 +14,18 @@ export default function FormularioCliente({
   precioDominio,
   hoy,
   proximoSugerido,
+  tienda,
 }: {
   cliente?: Partial<Cliente>;
   planes: Plan[];
   precioDominio: number;
   hoy: string;
   proximoSugerido: string;
+  /** Solo al agregar un cliente: datos para crear su tienda en el mismo paso. */
+  tienda?: { claveSugerida: string; urlTiendas: string };
 }) {
+  const [negocio, setNegocio] = useState(cliente?.negocio ?? "");
+  const [correo, setCorreo] = useState(cliente?.correo ?? "");
   const [planId, setPlanId] = useState(String(cliente?.plan_id ?? planes[0]?.id ?? ""));
   const [conDominio, setConDominio] = useState(cliente?.con_dominio ?? false);
   const plan = planes.find((p) => String(p.id) === planId);
@@ -31,7 +37,7 @@ export default function FormularioCliente({
 
       <label className="block">
         <span className="etiqueta">Nombre del negocio *</span>
-        <input name="negocio" required maxLength={120} defaultValue={cliente?.negocio} className="campo" placeholder="Ferretería El Constructor" />
+        <input name="negocio" required maxLength={120} value={negocio} onChange={(e) => setNegocio(e.target.value)} className="campo" placeholder="Ferretería El Constructor" />
       </label>
       <label className="block">
         <span className="etiqueta">Persona de contacto</span>
@@ -51,21 +57,33 @@ export default function FormularioCliente({
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
           <span className="etiqueta">Correo</span>
-          <input name="correo" type="email" maxLength={120} defaultValue={cliente?.correo} className="campo" />
+          <input name="correo" type="email" maxLength={120} value={correo} onChange={(e) => setCorreo(e.target.value)} className="campo" />
         </label>
         <label className="block">
           <span className="etiqueta">Dirección / ciudad</span>
           <input name="direccion" maxLength={200} defaultValue={cliente?.direccion} className="campo" />
         </label>
         <label className="block">
-          <span className="etiqueta">Enlace de su tienda</span>
-          <input name="sitio_url" maxLength={200} defaultValue={cliente?.sitio_url} className="campo" placeholder="https://…vercel.app" />
-        </label>
-        <label className="block">
-          <span className="etiqueta">Dominio</span>
+          <span className="etiqueta">Dominio propio</span>
           <input name="dominio" maxLength={120} defaultValue={cliente?.dominio} className="campo" placeholder="suferreteria.com" />
+          <span className="mt-1 block text-xs text-gray-500">Se activa en su tienda solo si marcas “Incluye dominio web”.</span>
         </label>
       </div>
+      {cliente?.tienda_id || tienda ? (
+        <input type="hidden" name="sitio_url" value={cliente?.sitio_url ?? ""} />
+      ) : (
+        <label className="block">
+          <span className="etiqueta">Enlace de su tienda</span>
+          <input name="sitio_url" maxLength={200} defaultValue={cliente?.sitio_url} className="campo" placeholder="https://…" />
+        </label>
+      )}
+
+      {tienda && (
+        <fieldset className="rounded-xl border border-green-200 bg-green-50 p-3">
+          <legend className="px-1 text-sm font-bold text-green-800">Tienda en línea</legend>
+          <CamposTienda negocio={negocio} correo={correo} claveSugerida={tienda.claveSugerida} urlTiendas={tienda.urlTiendas} />
+        </fieldset>
+      )}
 
       <fieldset className="space-y-3 rounded-xl border border-marca-100 bg-marca-50 p-3">
         <legend className="px-1 text-sm font-bold text-marca-700">Plan y cobro</legend>
