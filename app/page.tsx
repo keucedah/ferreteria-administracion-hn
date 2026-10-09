@@ -92,7 +92,7 @@ export default async function Inicio() {
             <p className="mt-6 text-sm text-gray-300">Ideal para ferreterías y negocios de materiales de construcción.</p>
           </div>
           <div className="relative mx-auto w-full max-w-md">
-            <img src="/capturas/tel-1.webp" width={480} height={987} fetchPriority="high" alt="Tienda en línea en un celular" className="h-auto mx-auto w-60 drop-shadow-2xl sm:w-72" />
+            <img src="/capturas/portada.webp" width={278} height={615} fetchPriority="high" alt="Tienda en línea en un celular" className="mx-auto h-auto w-full max-w-[278px] drop-shadow-2xl" />
             <img src="/logo.webp" width={128} height={128} alt="" className="absolute -left-2 top-4 hidden h-28 w-28 drop-shadow-xl sm:block" />
           </div>
         </div>
