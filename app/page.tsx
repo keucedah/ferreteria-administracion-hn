@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import FormularioDemo from "@/components/FormularioDemo";
+import Celular from "@/components/Celular";
 import {
   IcoBolsa, IcoCaja, IcoCarrito, IcoCategorias, IcoCelular, IcoCheck, IcoCorreo, IcoEngrane, IcoGlobo, IcoPaleta, IcoUbicacion, IcoWhatsApp,
 } from "@/components/Iconos";
@@ -31,10 +32,11 @@ const INSTALACION = [
 ];
 
 const CAPTURAS = [
-  { src: "/capturas/tel-1.webp", titulo: "Sitio web para clientes" },
-  { src: "/capturas/tel-2.webp", titulo: "App web para clientes" },
-  { src: "/capturas/tel-3.webp", titulo: "Carrito de cotización" },
-  { src: "/capturas/tel-4.webp", titulo: "Panel administrativo" },
+  { src: "/capturas/sitio-web.webp", titulo: "Sitio web para clientes" },
+  { src: "/capturas/app-web.webp", titulo: "App web para clientes" },
+  { src: "/capturas/carrito.webp", titulo: "Carrito de cotización" },
+  { src: "/capturas/panel-productos.webp", titulo: "Panel: agregar productos" },
+  { src: "/capturas/panel-tienda.webp", titulo: "Panel: logo y categorías" },
 ];
 
 export default async function Inicio() {
@@ -58,7 +60,6 @@ export default async function Inicio() {
           <nav className="hidden items-center gap-6 text-sm font-medium text-gray-200 md:flex">
             <a href="#funciones" className="hover:text-white">Funciones</a>
             <a href="#planes" className="hover:text-white">Planes</a>
-            <a href="#anuncios" className="hover:text-white">Anuncios</a>
             <a href="#contacto" className="hover:text-white">Contacto</a>
           </nav>
           <a href={enlaceDemo} target="_blank" rel="noopener noreferrer" className="boton-whatsapp">
@@ -92,7 +93,7 @@ export default async function Inicio() {
             <p className="mt-6 text-sm text-gray-300">Ideal para ferreterías y negocios de materiales de construcción.</p>
           </div>
           <div className="relative mx-auto w-full max-w-md">
-            <img src="/capturas/portada.webp" width={278} height={615} fetchPriority="high" alt="Tienda en línea en un celular" className="mx-auto h-auto w-full max-w-[278px] drop-shadow-2xl" />
+            <Celular src="/capturas/sitio-web.webp" alt="Tienda en línea en un celular" prioridad />
             <img src="/logo.webp" width={128} height={128} alt="" className="absolute -left-2 top-4 hidden h-28 w-28 drop-shadow-xl sm:block" />
           </div>
         </div>
@@ -121,10 +122,10 @@ export default async function Inicio() {
       <section className="py-16">
         <div className="mx-auto max-w-6xl px-4">
           <h2 className="text-center text-3xl font-black text-marino-900">Así se ve</h2>
-          <div className="mt-10 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="mt-10 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-5">
             {CAPTURAS.map((c) => (
-              <figure key={c.src} className="text-center">
-                <img src={c.src} width={480} height={987} alt={c.titulo} className="mx-auto h-auto w-full max-w-[240px]" loading="lazy" />
+              <figure key={c.titulo} className="text-center">
+                <Celular src={c.src} alt={c.titulo} />
                 <figcaption className="mx-auto mt-2 inline-block rounded-full bg-marca-500 px-4 py-1.5 text-sm font-bold text-white">{c.titulo}</figcaption>
               </figure>
             ))}
@@ -200,20 +201,6 @@ export default async function Inicio() {
         </div>
       </section>
 
-      {/* Anuncios */}
-      <section id="anuncios" className="scroll-mt-16 bg-gray-50 py-16">
-        <div className="mx-auto max-w-6xl px-4">
-          <h2 className="text-center text-3xl font-black text-marino-900">Nuestros anuncios</h2>
-          <p className="mt-2 text-center text-gray-600">Toca una imagen para verla completa o compartirla.</p>
-          <div className="mt-10 grid gap-6 sm:grid-cols-2">
-            {["funciones", "planes"].map((n) => (
-              <a key={n} href={`/anuncios/${n}.webp`} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-2xl shadow-md transition hover:shadow-xl">
-                <img src={`/anuncios/${n}-mini.webp`} width={560} height={840} alt="Anuncio de tienda en línea para ferreterías" className="h-auto w-full" loading="lazy" decoding="async" />
-              </a>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* Contacto */}
       <section id="contacto" className="scroll-mt-16 py-16">

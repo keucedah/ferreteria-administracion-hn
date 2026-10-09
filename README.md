@@ -1,8 +1,8 @@
 # Panel de clientes · Ferretería HN
 
-Página pública del servicio "Tu ferretería en línea" (funciones, planes, precios, anuncios y contacto) y un panel privado para administrar a tus clientes.
+Página pública del servicio "Tu ferretería en línea" (funciones, planes, precios, capturas y contacto) y un panel privado para administrar a tus clientes.
 
-**Público (sin cuenta):** ve los planes y precios, los anuncios, la dirección y el WhatsApp, y puede pedir una demostración.
+**Público (sin cuenta):** ve los planes y precios, capturas de la tienda, la dirección y el WhatsApp, y puede pedir una demostración.
 **Administrador:** entra con el enlace discreto "ENTRAR" (al pie de la página) y desde `/admin`:
 
 - Agrega, edita y elimina clientes; les asigna un plan (Básico, Pro, Premium o los que crees), con dominio o sin él, y un precio o límite especial si quieres.

@@ -5,6 +5,6 @@ export const SUPABASE_ANON_KEY =
 
 /**
  * Sin Supabase configurado el sitio funciona en modo demostración:
- * la página pública usa los planes de los anuncios y el panel muestra clientes de ejemplo (solo lectura).
+ * la página pública usa los planes de ejemplo y el panel muestra clientes de ejemplo (solo lectura).
  */
 export const supabaseConfigurado = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
